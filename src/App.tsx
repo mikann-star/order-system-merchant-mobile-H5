@@ -1,21 +1,22 @@
 import { FormEvent, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { AuthService, demoAccount, dishes as seedDishes, orders as seedOrders, reservations as seedReservations, tables as seedTables } from './services/mock'
 import { StoreSettingsPage } from './StoreSettingsPage'
-import type { Dish, Order, Reservation, Table, TableStatus } from './types'
+import { DishManagePage } from './DishManagePage'
+import type { Dish, DishCategory, Order, Reservation, Table, TableStatus } from './types'
 
 type Tab = 'tables' | 'orders' | 'reservations' | 'more' | 'service' | 'feedback' | 'me'
 type ServiceCategory = '添水' | '额外餐具' | '清理' | '催单' | '人工帮助'
 type ServiceRequest = { id: string; table: string; source: '用户' | 'AI'; time: string; content: string; status: '待处理' | '已处理'; category?: ServiceCategory; note?: string }
-type Detail = { type: 'table'; value: Table } | { type: 'order'; value: Order } | { type: 'reservation'; value: Reservation } | { type: 'service'; value: ServiceRequest } | { type: 'feedback'; value: ServiceRequest } | { type: 'module'; value: string } | null
+type Detail = { type: 'table'; value: Table } | { type: 'openTable'; value: Table } | { type: 'editTable'; value: Table } | { type: 'order'; value: Order } | { type: 'reservation'; value: Reservation } | { type: 'service'; value: ServiceRequest } | { type: 'feedback'; value: ServiceRequest } | { type: 'module'; value: string; table?: Table } | null
 
 const tabItems: { key: Tab; icon: string; label: string }[] = [
   { key: 'tables', icon: '▦', label: '桌台' }, { key: 'orders', icon: '▤', label: '订单' },
   { key: 'more', icon: '⊞', label: '更多' }, { key: 'service', icon: '♧', label: '服务请求' }, { key: 'me', icon: '◉', label: '我的' },
 ]
-const statusIcon: Record<TableStatus, string> = { 空闲: '○', 就餐中: '●', 待清理: '◐', 已预订: '⌑' }
+const statusIcon: Record<TableStatus, string> = { 空闲: '○', 就餐中: '●', 待清理: '◐' }
 
 function Status({ children }: { children: string }) { return <span className={`status ${children}`}>{children}</span> }
-function Toast({ message }: { message: string | null }) { return message ? <div className="toast">✓ {message}</div> : null }
+function Toast({ message }: { message: string | null }) { return message ? <div className="toast">{message}</div> : null }
 function Header({ title, right, back }: { title: string; right?: ReactNode; back?: () => void }) {
   return <header className="header">{back ? <button className="icon-button" onClick={back}>‹</button> : <span className="header-space" />}<h1>{title}</h1><span>{right}</span></header>
 }
@@ -106,7 +107,37 @@ function AddTablePage({ tables, onCancel, onSave, notify }: { tables: Table[]; o
   return <main className="add-table-page"><Header title="添加桌台" back={onCancel} /><section className="add-table-form"><div className="form-intro"><h2>桌台基础信息</h2><p>请填写桌号、容纳人数与所属区域</p></div><label>桌号 <em>*</em><input value={tableNumber} inputMode="numeric" maxLength={6} onBlur={validateTableNumber} onChange={event => { setTableNumber(event.target.value.replace(/\D/g, '')); setErrors(current => ({ ...current, tableNumber: '' })) }} placeholder="请输入桌号" />{errors.tableNumber && <small className="field-error">{errors.tableNumber}</small>}</label><label>容纳人数 <em>*</em><input value={seats} inputMode="numeric" maxLength={3} onBlur={validateSeats} onChange={event => { setSeats(event.target.value.replace(/\D/g, '')); setErrors(current => ({ ...current, seats: '' })) }} placeholder="请输入容纳人数" />{errors.seats && <small className="field-error">{errors.seats}</small>}</label><fieldset><legend>所属区域 <em>*</em></legend><div className="area-options">{['大厅', '包间', '户外'].map(item => <button type="button" className={area === item ? 'selected' : ''} onClick={() => setArea(item)} key={item}>{item}</button>)}</div></fieldset></section><footer className="form-actions"><button onClick={onCancel}>取消</button><button className="primary" onClick={submit}>确认</button></footer></main>
 }
 
-function DishManagePage({ dishes, onBack, onChange, notify }: { dishes: Dish[]; onBack: () => void; onChange: (dishes: Dish[]) => void; notify: (message: string) => void }) {
+function EditTablePage({ table, tables, onCancel, onSave, notify }: { table: Table; tables: Table[]; onCancel: () => void; onSave: (table: Table) => void; notify: (message: string, duration?: number) => void }) {
+  const [tableNumber, setTableNumber] = useState(table.name.replace(/\D/g, ''))
+  const [seats, setSeats] = useState(String(table.seats))
+  const [area, setArea] = useState(table.area)
+  const [errors, setErrors] = useState({ tableNumber: '', seats: '' })
+  const isPositiveInteger = (value: string) => /^[1-9]\d*$/.test(value)
+  const validateTableNumber = () => {
+    const error = isPositiveInteger(tableNumber) ? '' : '请输入有效的正整数桌号'
+    setErrors(current => ({ ...current, tableNumber: error }))
+    return !error
+  }
+  const validateSeats = () => {
+    const error = isPositiveInteger(seats) ? '' : '请输入有效的正整数容纳人数'
+    setErrors(current => ({ ...current, seats: error }))
+    return !error
+  }
+  const submit = () => {
+    const numberValid = validateTableNumber(); const seatsValid = validateSeats()
+    if (!numberValid || !seatsValid) {
+      const fields = [!numberValid && '桌号', !seatsValid && '容纳人数'].filter(Boolean).join('、')
+      notify(`请按要求填写${fields}`, 1000)
+      return
+    }
+    const duplicated = tables.some(item => item.id !== table.id && Number(item.name.replace(/\D/g, '')) === Number(tableNumber))
+    if (duplicated) { notify('该桌号已存在，请使用其他桌号', 1000); return }
+    onSave({ ...table, name: tableNumber, seats: Number(seats), area })
+  }
+  return <main className="add-table-page"><Header title={`${table.name}·编辑桌台`} back={onCancel} /><section className="add-table-form"><div className="form-intro"><h2>桌台基础信息</h2><p>请修改桌号、容纳人数与所属区域</p></div><label>桌号 <em>*</em><input value={tableNumber} inputMode="numeric" maxLength={6} onBlur={validateTableNumber} onChange={event => { setTableNumber(event.target.value.replace(/\D/g, '')); setErrors(current => ({ ...current, tableNumber: '' })) }} placeholder="请输入桌号" />{errors.tableNumber && <small className="field-error">{errors.tableNumber}</small>}</label><label>容纳人数 <em>*</em><input value={seats} inputMode="numeric" maxLength={3} onBlur={validateSeats} onChange={event => { setSeats(event.target.value.replace(/\D/g, '')); setErrors(current => ({ ...current, seats: '' })) }} placeholder="请输入容纳人数" />{errors.seats && <small className="field-error">{errors.seats}</small>}</label><fieldset><legend>所属区域 <em>*</em></legend><div className="area-options">{['大厅', '包间', '户外'].map(item => <button type="button" className={area === item ? 'selected' : ''} onClick={() => setArea(item)} key={item}>{item}</button>)}</div></fieldset></section><footer className="form-actions"><button onClick={onCancel}>取消</button><button className="primary" onClick={submit}>确认</button></footer></main>
+}
+
+function LegacyDishManagePage({ dishes, onBack, onChange, notify }: { dishes: Dish[]; onBack: () => void; onChange: (dishes: Dish[]) => void; notify: (message: string) => void }) {
   const [keyword, setKeyword] = useState('')
   const [category, setCategory] = useState('所有分类')
   const [status, setStatus] = useState('所有状态')
@@ -128,11 +159,65 @@ function DishForm({ dish, categories, onCancel, onSave }: { dish?: Dish; categor
   return <main className="dish-page"><Header title={dish?.id ? '编辑菜品' : '新增菜品'} back={onCancel} /><section className="dish-form"><label>菜品名称（中文）<em>*</em><input value={form.name} onChange={event => update('name', event.target.value)} placeholder="请输入菜品中文名称" /></label><label>菜品名称（英文）<em>*</em><input value={form.englishName} onChange={event => update('englishName', event.target.value)} placeholder="请输入菜品英文名称" /></label><label>价格（¥）<em>*</em><input value={form.price || ''} inputMode="decimal" onChange={event => update('price', Number(event.target.value))} placeholder="请输入菜品价格" /></label><label>所属分类<em>*</em><select value={form.category} onChange={event => update('category', event.target.value)}>{categories.map(item => <option key={item}>{item}</option>)}</select></label><label>库存<input value={form.stock || ''} inputMode="numeric" onChange={event => update('stock', Number(event.target.value))} placeholder="库存为空时默认为 0" /></label><label>状态<select value={form.status} onChange={event => update('status', event.target.value as Dish['status'])}>{['已上架', '已下架', '售罄'].map(item => <option key={item}>{item}</option>)}</select></label><label className="recommend-switch">是否推荐<button type="button" className={form.recommended ? 'on' : ''} onClick={() => update('recommended', !form.recommended)}><i /></button></label>{errors.map(error => <small className="field-error" key={error}>{error}</small>)}</section><footer className="form-actions"><button onClick={onCancel}>取消</button><button className="primary" onClick={save}>保存</button></footer></main>
 }
 
-function TablesPage({ tables, setDetail, updateTable }: { tables: Table[]; setDetail: (d: Detail) => void; updateTable: (id: string, s: TableStatus) => void }) {
+function OpenTablePage({ table, onCancel, onConfirm, notify }: { table: Table; onCancel: () => void; onConfirm: (diners: number, startedAt: string) => void; notify: (message: string, duration?: number) => void }) {
+  const [diners, setDiners] = useState('')
+  const [guest, setGuest] = useState('')
+  const [phone, setPhone] = useState('')
+  const [startedAt, setStartedAt] = useState('')
+  const [dinersError, setDinersError] = useState('')
+  const [timeError, setTimeError] = useState('')
+  const [timePickerOpen, setTimePickerOpen] = useState(false)
+  const [pickerDate, setPickerDate] = useState('')
+  const [pickerHour, setPickerHour] = useState('')
+  const [pickerMinute, setPickerMinute] = useState('')
+  const [pickerError, setPickerError] = useState('')
+  const [calendarMonth, setCalendarMonth] = useState(new Date())
+  const now = new Date()
+  const maxDateTime = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}T${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+  const validateDiners = () => {
+    const count = Number(diners)
+    const valid = Number.isInteger(count) && count >= 1 && count <= table.seats
+    setDinersError(valid ? '' : `请输入 1~${table.seats} 之间的正整数用餐人数`)
+    return valid
+  }
+  const validateTime = () => {
+    const valid = !startedAt || new Date(startedAt) <= new Date()
+    setTimeError(valid ? '' : '开台时间不能晚于当前时间')
+    return valid
+  }
+  const setPickerTo = (value: string) => { setPickerDate(value.slice(0, 10)); setPickerHour(value.slice(11, 13)); setPickerMinute(value.slice(14, 16)); setCalendarMonth(new Date(`${value.slice(0, 10)}T00:00:00`)); setPickerError('') }
+  const openTimePicker = () => { setPickerTo(startedAt || maxDateTime); setTimePickerOpen(true) }
+  const confirmTimePicker = () => {
+    const value = `${pickerDate}T${pickerHour}:${pickerMinute}`
+    if (!pickerDate || !pickerHour || !pickerMinute || new Date(value) > new Date()) { setPickerError('开台时间不能晚于当前时间'); return }
+    setStartedAt(value); setTimeError(''); setTimePickerOpen(false)
+  }
+  const calendarYear = calendarMonth.getFullYear()
+  const calendarMonthIndex = calendarMonth.getMonth()
+  const firstWeekday = new Date(calendarYear, calendarMonthIndex, 1).getDay()
+  const calendarDays = Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(calendarYear, calendarMonthIndex, index - firstWeekday + 1)
+    return { day: date.getDate(), value: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`, currentMonth: date.getMonth() === calendarMonthIndex }
+  })
+  const todayDate = maxDateTime.slice(0, 10)
+  const chooseDate = (value: string) => { if (value <= todayDate) { setPickerDate(value); setPickerError('') } }
+  const confirm = () => {
+    const validDiners = validateDiners()
+    const validTime = validateTime()
+    if (!validDiners || !validTime) { notify(`请按要求正确填写 ${[!validDiners && '用餐人数', !validTime && '开台时间'].filter(Boolean).join('、')}`, 1000); return }
+    const value = startedAt ? new Date(startedAt) : new Date()
+    const displayTime = `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}`
+    onConfirm(Number(diners), displayTime)
+  }
+  return <main className="open-table-page"><Header title={`${table.name}·开台`} back={onCancel} right={<button className="text-action" onClick={onCancel}>×</button>} /><section className="open-table-info"><span>当前桌台</span><b>{table.name} 号桌</b><small>{table.seats} 人桌 · {table.area}</small></section><section className="open-table-form"><label>用餐人数 <em>*</em><input value={diners} inputMode="numeric" onBlur={validateDiners} onChange={event => { setDiners(event.target.value); setDinersError('') }} placeholder={`请输入 1~${table.seats} 人`} />{dinersError && <small className="field-error">{dinersError}</small>}</label><label>顾客称呼 <small>（选填）</small><input value={guest} onChange={event => setGuest(event.target.value)} placeholder="请输入顾客称呼" /></label><label>顾客电话 <small>（选填）</small><input value={phone} onChange={event => setPhone(event.target.value)} placeholder="请输入顾客电话" /></label><label>开台时间 <small>（选填）</small><div className="time-picker-field"><button type="button" className={startedAt ? 'selected' : ''} onClick={openTimePicker}><span>{startedAt ? startedAt.replace('T', ' ') : '不填写则以确认开台时刻为准'}</span><i>▦</i></button></div>{timeError && <small className="field-error">{timeError}</small>}</label><p>仅可选择当前时刻或更早的开台时间。</p></section><footer className="form-actions"><button onClick={onCancel}>取消</button><button className="primary" onClick={confirm}>确认开台</button></footer>{timePickerOpen && <div className="modal-backdrop time-picker-backdrop"><section className="modal custom-time-picker"><h2>选择开台时间</h2><section className="calendar-panel"><header><span><button type="button" aria-label="上一年" onClick={() => setCalendarMonth(new Date(calendarYear - 1, calendarMonthIndex, 1))}>«</button><button type="button" aria-label="上个月" onClick={() => setCalendarMonth(new Date(calendarYear, calendarMonthIndex - 1, 1))}>‹</button></span><b>{calendarYear}年 {String(calendarMonthIndex + 1).padStart(2, '0')}月</b><span><button type="button" aria-label="下个月" onClick={() => setCalendarMonth(new Date(calendarYear, calendarMonthIndex + 1, 1))}>›</button><button type="button" aria-label="下一年" onClick={() => setCalendarMonth(new Date(calendarYear + 1, calendarMonthIndex, 1))}>»</button></span></header><div className="calendar-weekdays">{['日', '一', '二', '三', '四', '五', '六'].map(day => <span key={day}>{day}</span>)}</div><div className="calendar-days">{calendarDays.map((day, index) => <button type="button" key={index} disabled={day.value > todayDate} className={`${!day.currentMonth ? 'outside ' : ''}${pickerDate === day.value ? 'selected' : ''}`} onClick={() => chooseDate(day.value)}>{day.day}</button>)}</div></section><div className="time-selects"><label>时<select size={5} value={pickerHour} onChange={event => { setPickerHour(event.target.value); setPickerError('') }}>{Array.from({ length: 24 }, (_, value) => String(value).padStart(2, '0')).map(value => <option key={value}>{value}</option>)}</select></label><span>:</span><label>分<select size={5} value={pickerMinute} onChange={event => { setPickerMinute(event.target.value); setPickerError('') }}>{Array.from({ length: 60 }, (_, value) => String(value).padStart(2, '0')).map(value => <option key={value}>{value}</option>)}</select></label></div>{pickerError && <small className="field-error">{pickerError}</small>}<footer><button onClick={() => { setStartedAt(maxDateTime); setTimeError(''); setTimePickerOpen(false) }}>此刻</button><div><button onClick={() => setTimePickerOpen(false)}>取消</button><button className="primary" onClick={confirmTimePicker}>确认</button></div></footer></section></div>}</main>
+}
+
+function TablesPage({ tables, setDetail, updateTable }: { tables: Table[]; setDetail: (d: Detail) => void; updateTable: (id: string, status: TableStatus) => void }) {
   const [area, setArea] = useState('全部')
   const [searchOpen, setSearchOpen] = useState(false)
   const [keyword, setKeyword] = useState('')
   const [selectedTable, setSelectedTable] = useState<string | null>(null)
+  const [menuTable, setMenuTable] = useState<Table | null>(null)
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('ready')
   const areaTables = tables.filter(table => area === '全部' || table.area === area)
   const list = (selectedTable ? areaTables.filter(table => table.name === selectedTable) : areaTables).sort((a, b) => Number(a.name.replace(/\D/g, '')) - Number(b.name.replace(/\D/g, '')) || a.name.localeCompare(b.name))
@@ -142,25 +227,26 @@ function TablesPage({ tables, setDetail, updateTable }: { tables: Table[]; setDe
   const selectTable = (table: Table) => { setKeyword(table.name); setSelectedTable(table.name); setSearchOpen(false) }
   const onSearchKeyDown = (key: string) => { if (key === 'Enter' && suggestions.length) selectTable(suggestions[0]) }
   const openCard = (table: Table) => {
-    if (table.status === '待清理') updateTable(table.id, '空闲')
+    if (table.status === '空闲') setDetail({ type: 'openTable', value: table })
+    else if (table.status === '待清理') updateTable(table.id, '空闲')
     else setDetail({ type: 'table', value: table })
   }
   return <><div className="store-strip"><div><small>当前门店</small><strong>FKM · 湖滨店⌄</strong></div><button className="bell">♧<i /></button></div>
     <section className="page-heading"><h2>桌台管理</h2><p>实时掌握门店桌台与用餐状态</p></section>
     <div className="chips">{['全部', '大厅', '包间', '露台'].map(item => <button onClick={() => { setArea(item); clearSearch() }} className={area === item ? 'active' : ''} key={item}>{item}</button>)}</div>
-    <div className="table-stats">{(['空闲', '就餐中', '待清理', '已预订'] as TableStatus[]).map(s => <div key={s}><b className={s}>{statusIcon[s]}</b><span>{s}</span><strong>{stats(s)}</strong></div>)}</div>
+    <div className="table-stats">{(['空闲', '就餐中', '待清理'] as TableStatus[]).map(s => <div key={s}><b className={s}>{statusIcon[s]}</b><span>{s}</span><strong>{stats(s)}</strong></div>)}</div>
     <div className="section-line table-list-header"><div><h3>桌台列表</h3><span>{loadState === 'ready' ? `${list.length} 张` : ''}</span></div><div className="search-inline"><span>⌕</span><input value={keyword} onFocus={() => setSearchOpen(true)} onKeyDown={event => onSearchKeyDown(event.key)} onChange={event => { setKeyword(event.target.value); setSelectedTable(null) }} placeholder="搜索桌台编号" />{searchOpen && keyword && <div className="suggestions">{suggestions.length ? suggestions.map(table => <button key={table.id} onMouseDown={event => event.preventDefault()} onClick={() => selectTable(table)}><b>{table.name} 号桌</b><span>{table.area} · {table.status}</span></button>) : <p>未找到相关桌台</p>}</div>}</div><button className="clear-search" onClick={clearSearch}>清空</button></div>
     {loadState === 'loading' && <section className="table-grid skeleton-grid">{[1, 2, 3, 4].map(item => <div className="table-card skeleton" key={item}><span>加载中</span></div>)}</section>}
     {loadState === 'error' && <section className="table-state"><i>!</i><b>桌台加载失败，请检查网络后重试</b><button onClick={() => { setLoadState('loading'); window.setTimeout(() => setLoadState('ready'), 500) }}>重新加载</button></section>}
     {loadState === 'ready' && !list.length && <section className="table-state"><i>⌂</i><b>{selectedTable ? '未找到相关桌台' : '暂未添加桌台'}</b>{selectedTable && <button onClick={clearSearch}>清除搜索</button>}</section>}
     {loadState === 'ready' && !!list.length && <section className="table-grid">{list.map(table => {
-      const cardStatus: TableStatus = table.status === '已预订' ? '空闲' : table.status
-      return <article className={`table-card ${cardStatus}`} key={table.id} onClick={() => openCard(table)}>
-        <button className="dots" aria-label={`${table.name} 号桌更多操作`} onClick={event => { event.stopPropagation(); setDetail({ type: 'table', value: table }) }}>•••</button><div className="table-title"><strong>{table.name}</strong>{table.status === '已预订' && <span title="存在有效预订">🛎️</span>}</div><small>{table.seats} 人桌 · {table.area}</small>
-        <span className="table-desc">{cardStatus === '就餐中' ? `${table.startedAt} 开始 · ${table.diners} 人用餐` : cardStatus === '待清理' ? '点击完成清理' : '点击即可开台'}</span>
-        <Status>{cardStatus}</Status>
+      return <article className={`table-card ${table.status}`} key={table.id} onClick={() => openCard(table)}>
+        <button className="dots" aria-label={`${table.name} 号桌更多操作`} onClick={event => { event.stopPropagation(); setMenuTable(table) }}>•••</button><div className="table-title"><strong>{table.name}</strong>{table.reserved && <span title="存在有效预订">🛎️</span>}</div><small>{table.seats} 人桌 · {table.area}</small>
+        <span className="table-desc">{table.status === '就餐中' ? `${table.startedAt}开始·${table.diners}人用餐` : table.status === '待清理' ? '点击完成清理' : '点击即可开台'}</span>
+        <Status>{table.status}</Status>
       </article>
     })}</section>}
+    {menuTable && <div className="modal-backdrop" onClick={() => setMenuTable(null)}><section className="modal table-menu" onClick={event => event.stopPropagation()}><header><h2>{menuTable.name} 号桌</h2><button className="modal-close" aria-label="关闭更多操作" onClick={() => setMenuTable(null)}>×</button></header>{menuTable.status === '空闲' && <button className="primary" onClick={() => { setDetail({ type: 'openTable', value: menuTable }); setMenuTable(null) }}>开台</button>}<button onClick={() => { setDetail({ type: 'table', value: menuTable }); setMenuTable(null) }}>详情 / 点餐</button></section></div>}
     <button className="floating" onClick={() => setDetail({ type: 'module', value: '添加桌台' })}>＋ 添加桌台</button>
   </>
 }
@@ -320,6 +406,7 @@ function TableOrderCore({ orders, discount, onCheckout, notify }: { orders: Orde
   const [refundReason, setRefundReason] = useState('')
   const [refunded, setRefunded] = useState<Record<string, number>>({})
   const [checkoutConfirm, setCheckoutConfirm] = useState(false)
+  const [checkoutTip, setCheckoutTip] = useState<string | null>(null)
   const [expandedItem, setExpandedItem] = useState<string | null>(null)
   const itemTotal = (item: Order['items'][number]) => item.quantity
   const itemKey = (order: Order, item: Order['items'][number]) => `${order.id}-${item.id}`
@@ -329,6 +416,12 @@ function TableOrderCore({ orders, discount, onCheckout, notify }: { orders: Orde
   const preDiscountAmount = originalAmount - dishDiscountAmount - refundAmount
   const wholeDiscountAmount = discount ? Math.min(preDiscountAmount, discount.type === 'percentage' ? preDiscountAmount * discount.value / 100 : discount.value) : 0
   const payableAmount = preDiscountAmount - wholeDiscountAmount
+  const paymentAmountLabel = orders.length > 0 && orders.every(order => order.status === '已完成') ? '实付金额' : '待付金额'
+  // 当前原型尚未配置待下单区域；接入后在此处关联待下单菜品数量。
+  const hasPendingItems = false
+  const checkoutUnavailableMessage = hasPendingItems ? '待下单区域存在未处理菜品，请先提交下单或删除待下单菜品后，再进行结账。' : payableAmount < 0 ? '当前待付金额为负数，请调整折扣后再结账。' : null
+  const canCheckout = !checkoutUnavailableMessage
+  const requestCheckout = () => { if (!canCheckout) { setCheckoutTip(checkoutUnavailableMessage!); window.setTimeout(() => setCheckoutTip(null), 1000); return }; setCheckoutConfirm(true) }
   const confirmRefund = () => {
     if (!refundTarget) return
     if (refundTarget.item) {
@@ -348,10 +441,17 @@ function TableOrderCore({ orders, discount, onCheckout, notify }: { orders: Orde
   }
   const orderFullyRefunded = (order: Order) => order.items.every(item => (refunded[itemKey(order, item)] ?? 0) >= itemTotal(item))
   const orderPartiallyRefunded = (order: Order) => !orderFullyRefunded(order) && order.items.some(item => (refunded[itemKey(order, item)] ?? 0) > 0)
-  const refundedRows = orders.flatMap(order => order.items.map(item => ({ item, quantity: refunded[itemKey(order, item)] ?? 0, amount: item.discountedUnitPrice * (refunded[itemKey(order, item)] ?? 0) })).filter(row => row.quantity > 0))
+  const refundedRows = Array.from(orders.flatMap(order => order.items.map(item => ({ item, quantity: refunded[itemKey(order, item)] ?? 0 })).filter(row => row.quantity > 0)).reduce((rows, { item, quantity }) => {
+    const key = `${item.name}::${item.specs ?? ''}`
+    const row = rows.get(key) ?? { name: item.name, specs: item.specs, quantity: 0, amount: 0 }
+    row.quantity += quantity
+    row.amount += item.discountedUnitPrice * quantity
+    rows.set(key, row)
+    return rows
+  }, new Map<string, { name: string; specs?: string; quantity: number; amount: number }>()).values())
   const orderOriginalAmount = (order: Order) => order.items.reduce((sum, item) => sum + item.originalUnitPrice * item.quantity, 0)
   const wholeRefundAmount = refundTarget && !refundTarget.item ? refundTarget.order.items.reduce((sum, item) => sum + item.discountedUnitPrice * (item.quantity - (refunded[itemKey(refundTarget.order, item)] ?? 0)), 0) : 0
-  return <><section className="detail-section table-order-core" onClick={() => setExpandedItem(null)}><div className="order-detail-title"><h3>订单详情</h3></div>{discount && <div className="current-discount"><span>当前折扣</span><b>{discount.type === 'percentage' ? `百分比折扣 ${discount.value}%` : `固定金额减免 ¥${discount.value.toFixed(2)}`}</b></div>}{orders.length ? <><section className="order-core-section"><h4>已下单</h4>{orders.map(order => <article className="submitted-order" key={order.id}><header className="order-primary"><b>{order.id}</b>{orderFullyRefunded(order) ? <em className="refund-status full">已退款</em> : orderPartiallyRefunded(order) ? <em className="refund-status partial">部分退款</em> : <span />}{!orderFullyRefunded(order) && <button onClick={() => { setRefundTarget({ order }); setRefundQuantity(1) }}>整单退款</button>}</header><div className="order-meta"><span>{order.source}</span><time>{order.time}</time></div>{order.items.map(item => { const refundedCount = refunded[itemKey(order, item)] ?? 0; const total = itemTotal(item); const key = itemKey(order, item); return <div className={`submitted-item ${refundedCount === total ? 'fully-refunded' : ''}`} key={item.id}><div><button className={`dish-name ${expandedItem === key ? 'expanded' : ''}`} onClick={event => { event.stopPropagation(); setExpandedItem(expandedItem === key ? null : key) }}>{item.name}</button>{refundedCount > 0 && <em>已退×{refundedCount}</em>}{item.specs && <small>{item.specs}</small>}</div><span>¥{item.discountedUnitPrice.toFixed(2)} × {item.quantity}</span><button disabled={refundedCount === total} onClick={() => { setRefundTarget({ order, item }); setRefundQuantity(1) }}>{refundedCount === total ? '已退款' : '退款'}</button></div> })}</article>)}</section>{refundedRows.length > 0 && <section className="order-core-section refunded-section"><h4>已退款</h4>{refundedRows.map((row, index) => <div className="refunded-item" key={`${row.item.id}-${index}`}><b>{row.item.name}</b><span>退款×{row.quantity}</span><strong>¥{row.amount.toFixed(2)}</strong></div>)}</section>}</> : <div className="order-empty"><i>⌑</i><p>当前暂无已下单菜品，快快去下单吧~</p></div>}<section className="amount-summary"><h4>金额统计</h4><p><span>菜品原价</span><b>¥{originalAmount.toFixed(2)}</b></p><p><span>菜品折扣</span><b>−¥{dishDiscountAmount.toFixed(2)}</b></p><p><span>已退款</span><b>−¥{refundAmount.toFixed(2)}</b></p><p><span>整单折扣</span><b>−¥{wholeDiscountAmount.toFixed(2)}</b></p><div><span>合计</span><strong>¥{payableAmount.toFixed(2)}</strong></div></section></section><footer className="fixed-action table-checkout"><button className="primary large" disabled={payableAmount <= 0} onClick={() => setCheckoutConfirm(true)}>结账</button></footer>{refundTarget && <RefundModal target={refundTarget} quantity={refundQuantity} setQuantity={setRefundQuantity} error={refundError} setError={setRefundError} returnStock={returnStock} setReturnStock={setReturnStock} reason={refundReason} setReason={setRefundReason} wholeAmount={wholeRefundAmount} maxQuantity={refundTarget.item ? itemTotal(refundTarget.item) - (refunded[itemKey(refundTarget.order, refundTarget.item)] ?? 0) : undefined} onCancel={() => setRefundTarget(null)} onConfirm={confirmRefund} />}{checkoutConfirm && <div className="modal-backdrop"><section className="modal"><h2>确认结账</h2><p>是否确定对当前桌台进行结账，当前消费金额为 ¥{payableAmount.toFixed(2)}？</p><div><button onClick={() => setCheckoutConfirm(false)}>取消</button><button className="primary" onClick={onCheckout}>确认结账</button></div></section></div>}</>
+  return <><section className="detail-section table-order-core" onClick={() => setExpandedItem(null)}><div className="order-detail-title"><h3>订单详情</h3></div>{discount && <div className="current-discount"><span>当前折扣</span><b>{discount.type === 'percentage' ? `百分比折扣 ${discount.value}%` : `固定金额减免 ¥${discount.value.toFixed(2)}`}</b></div>}{orders.length ? <><section className="order-core-section"><h4>已下单</h4>{orders.map(order => <article className="submitted-order" key={order.id}><header className="order-primary"><div className="order-id-with-status"><b>{order.id}</b>{orderFullyRefunded(order) ? <em className="refund-status full">已退款</em> : orderPartiallyRefunded(order) ? <em className="refund-status partial">部分退款</em> : null}</div>{!orderFullyRefunded(order) && <button onClick={() => { setRefundTarget({ order }); setRefundQuantity(1) }}>整单退款</button>}</header><div className="order-meta"><span>{order.source}</span><time>{order.time}</time></div>{order.items.map(item => { const refundedCount = refunded[itemKey(order, item)] ?? 0; const total = itemTotal(item); const key = itemKey(order, item); return <div className={`submitted-item ${refundedCount === total ? 'fully-refunded' : ''}`} key={item.id}><div><div className="dish-name-row"><button className={`dish-name ${expandedItem === key ? 'expanded' : ''}`} onClick={event => { event.stopPropagation(); setExpandedItem(expandedItem === key ? null : key) }}>{item.name}</button>{refundedCount > 0 && <em>已退×{refundedCount}</em>}</div>{item.specs && <small>{item.specs}</small>}</div><span className="item-price"><b>¥{(item.discountedUnitPrice * item.quantity).toFixed(2)}</b>{item.originalUnitPrice > item.discountedUnitPrice && <del>¥{(item.originalUnitPrice * item.quantity).toFixed(2)}</del>}</span><span className="item-quantity">× {item.quantity}</span><button disabled={refundedCount === total} onClick={() => { setRefundTarget({ order, item }); setRefundQuantity(1) }}>{refundedCount === total ? '已退款' : '退款'}</button></div> })}</article>)}</section>{refundedRows.length > 0 && <section className="order-core-section refunded-section"><h4>已退款</h4>{refundedRows.map(row => <div className="refunded-item" key={`${row.name}-${row.specs ?? 'default'}`}><div><b>{row.name}</b><small>{row.specs || '默认规格'}</small></div><span>退款×{row.quantity}</span><strong>¥{row.amount.toFixed(2)}</strong></div>)}</section>}</> : <div className="order-empty"><i>⌑</i><p>当前暂无已下单菜品，快快去下单吧~</p></div>}<section className="amount-summary"><h4>金额统计</h4><p><span>菜品原价</span><b>¥{originalAmount.toFixed(2)}</b></p>{dishDiscountAmount > 0 && <p><span>菜品优惠</span><b>−¥{dishDiscountAmount.toFixed(2)}</b></p>}{refundAmount > 0 && <p><span>已退款金额</span><b>−¥{refundAmount.toFixed(2)}</b></p>}{wholeDiscountAmount > 0 && <p><span>整单优惠</span><b>−¥{wholeDiscountAmount.toFixed(2)}</b></p>}<div><span>{paymentAmountLabel}</span><strong>¥{payableAmount.toFixed(2)}</strong></div></section></section><footer className="fixed-action table-checkout"><button className="primary large" onClick={requestCheckout}>结账</button></footer>{checkoutTip && <div className="checkout-tip">{checkoutTip}</div>}{refundTarget && <RefundModal target={refundTarget} quantity={refundQuantity} setQuantity={setRefundQuantity} error={refundError} setError={setRefundError} returnStock={returnStock} setReturnStock={setReturnStock} reason={refundReason} setReason={setRefundReason} wholeAmount={wholeRefundAmount} maxQuantity={refundTarget.item ? itemTotal(refundTarget.item) - (refunded[itemKey(refundTarget.order, refundTarget.item)] ?? 0) : undefined} onCancel={() => setRefundTarget(null)} onConfirm={confirmRefund} />}{checkoutConfirm && <div className="modal-backdrop checkout-modal-backdrop"><section className="modal checkout-confirm-modal"><h2>确认结账</h2><p>是否确定对当前桌台进行结账，当前消费金额为 ¥{payableAmount.toFixed(2)}？</p><div><button onClick={() => setCheckoutConfirm(false)}>取消</button><button className="primary" onClick={onCheckout}>确定</button></div></section></div>}</>
 }
 
 function ServiceRequestDetail({ request, title, onBack, onSave, notify }: { request: ServiceRequest; title: string; onBack: () => void; onSave: (note: string) => void; notify: (message: string) => void }) {
@@ -359,7 +459,7 @@ function ServiceRequestDetail({ request, title, onBack, onSave, notify }: { requ
   return <><Header title={title} back={onBack} /><section className="detail-section service-detail"><div className="service-detail-title"><h2>{request.table} 桌 · {request.source}</h2><Status>{request.status}</Status></div><div className="service-detail-meta"><span>请求时间</span><b>{request.time}</b></div><div className="service-detail-content"><span>{title.replace('详情', '内容')}</span><p>{request.content}</p></div></section><section className="detail-section service-note"><h3>备注 <small>（选填）</small></h3><textarea value={note} maxLength={200} onChange={event => setNote(event.target.value)} placeholder="请输入备注内容" /><p>{note.length}/200</p></section><footer className="fixed-action"><button className="primary large" onClick={() => { onSave(note.trim()); notify('备注已保存'); onBack() }}>保存备注</button></footer></>
 }
 
-function DetailPage({ detail, close, updateTable, confirmOrder, updateReservation, updateServiceRequest, updateFeedback, tables, orders, dishes, onDishesChange, addTable, notify }: { detail: Exclude<Detail, null>; close: () => void; updateTable: (id: string, s: TableStatus) => void; confirmOrder: (id: string) => void; updateReservation: (id: string, s: Reservation['status']) => void; updateServiceRequest: (id: string, note: string) => void; updateFeedback: (id: string, note: string) => void; tables: Table[]; orders: Order[]; dishes: Dish[]; onDishesChange: (dishes: Dish[]) => void; addTable: (table: Table) => void; notify: (message: string) => void }) {
+function DetailPage({ detail, close, openModule, openTablePage, openEditTable, openTableModule, returnToTable, openTable, transferTable, updateTableDetails, updateTable, confirmOrder, updateReservation, updateServiceRequest, updateFeedback, tables, orders, dishes, categories, onDishesChange, onCategoriesChange, addTable, notify }: { detail: Exclude<Detail, null>; close: () => void; openModule: (name: string) => void; openTablePage: (table: Table) => void; openEditTable: (table: Table) => void; openTableModule: (table: Table, name: string) => void; returnToTable: (table: Table) => void; openTable: (table: Table, diners: number, startedAt: string) => void; transferTable: (source: Table, target: Table) => boolean; updateTableDetails: (table: Table) => void; updateTable: (id: string, s: TableStatus) => void; confirmOrder: (id: string) => void; updateReservation: (id: string, s: Reservation['status']) => void; updateServiceRequest: (id: string, note: string) => void; updateFeedback: (id: string, note: string) => void; tables: Table[]; orders: Order[]; dishes: Dish[]; categories: DishCategory[]; onDishesChange: (dishes: Dish[]) => void; onCategoriesChange: (categories: DishCategory[]) => void; addTable: (table: Table) => void; notify: (message: string, duration?: number) => void }) {
   const [tableDiscount, setTableDiscount] = useState<TableDiscount>(null)
   const [discountOpen, setDiscountOpen] = useState(false)
   const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('percentage')
@@ -370,25 +470,44 @@ function DetailPage({ detail, close, updateTable, confirmOrder, updateReservatio
   const [detailRefundError, setDetailRefundError] = useState('')
   const [detailReturnStock, setDetailReturnStock] = useState(false)
   const [detailRefundReason, setDetailRefundReason] = useState('')
+  const [transferOpen, setTransferOpen] = useState(false)
+  const [transferTarget, setTransferTarget] = useState<Table | null>(null)
+  if (detail.type === 'openTable') return <OpenTablePage table={detail.value} onCancel={() => returnToTable(detail.value)} onConfirm={(diners, startedAt) => openTable(detail.value, diners, startedAt)} notify={notify} />
+  if (detail.type === 'editTable') return <EditTablePage table={detail.value} tables={tables} onCancel={() => returnToTable(detail.value)} onSave={updateTableDetails} notify={notify} />
   if (detail.type === 'service') return <ServiceRequestDetail request={detail.value} title="服务请求详情" onBack={close} onSave={note => updateServiceRequest(detail.value.id, note)} notify={notify} />
   if (detail.type === 'feedback') return <ServiceRequestDetail request={detail.value} title="客户反馈详情" onBack={close} onSave={note => updateFeedback(detail.value.id, note)} notify={notify} />
   if (detail.type === 'module' && detail.value === '添加桌台') return <AddTablePage tables={tables} onCancel={close} onSave={addTable} notify={notify} />
-  if (detail.type === 'module' && detail.value === '菜品管理') return <DishManagePage dishes={dishes} onBack={close} onChange={onDishesChange} notify={notify} />
+  if (detail.type === 'module' && detail.value === '菜品管理') return <DishManagePage dishes={dishes} categories={categories} onBack={close} onDishesChange={onDishesChange} onCategoriesChange={onCategoriesChange} notify={notify} />
   if (detail.type === 'module' && detail.value === '店铺设置') return <StoreSettingsPage onBack={close} notify={notify} />
-  if (detail.type === 'module') return <><Header title={detail.value} back={close} /><section className="placeholder"><i>{detail.value === '财务统计' ? '▥' : '⌑'}</i><h2>{detail.value}</h2><p>{detail.value === '财务统计' ? '今日营收、趋势与热门菜品将在这里展示。' : '该模块已预留移动端入口，后续可接入真实业务数据。'}</p></section></>
+  if (detail.type === 'module') return <><Header title={detail.value} back={detail.table ? () => returnToTable(detail.table!) : close} /><section className="placeholder"><i>{detail.value === '财务统计' ? '▥' : '⌑'}</i><h2>{detail.value}</h2><p>{detail.value === '财务统计' ? '今日营收、趋势与热门菜品将在这里展示。' : '该模块已预留移动端入口，后续可接入真实业务数据。'}</p></section></>
   if (detail.type === 'table') {
     const t = detail.value
     const tableOrders = orders.filter(order => order.table === t.name)
-    const actions = t.status === '空闲' ? ['开台', '点餐', '编辑桌台'] : t.status === '就餐中' ? ['点餐', '设置折扣', '换台', '编辑桌台'] : ['完成清理', '编辑桌台']
-    const description = t.status === '空闲' ? '当前桌台空闲，可进行开台或预订' : t.status === '就餐中' ? `${t.startedAt} 开台 · ${t.diners} 人用餐` : '当前桌台待清理，请及时完成清台'
-    const actionClick = (action: string) => {
-      if (action === '开台') updateTable(t.id, '就餐中')
-      else if (action === '完成清理') updateTable(t.id, '空闲')
-      else if (action === '设置折扣') setDiscountOpen(true)
-      else notify(`${action}功能已进入后续开发流程`)
+    const actions = ['开台', '点餐', '设置折扣', '换台', '编辑桌台']
+    const description = t.status === '空闲' ? '当前桌台空闲，可进行开台' : t.status === '就餐中' ? `${t.startedAt} 开台 · ${t.diners} 人用餐` : '当前桌台待清理，请及时完成清台'
+    const unavailableActionMessages: Record<TableStatus, Partial<Record<string, string>>> = {
+      空闲: { 点餐: '当前桌台尚未开台，请先完成开台后再进行点餐。', 设置折扣: '当前桌台尚未开台，暂无法设置折扣。', 换台: '当前桌台尚未开台，暂无法进行换台操作。' },
+      就餐中: { 开台: '当前桌台正在就餐中，无需重复开台。', 编辑桌台: '当前桌台正在就餐中，暂无法编辑桌台。' },
+      待清理: { 开台: '当前桌台待清理，请先完成清台后再开台。', 点餐: '请先完成清台并开台后，再进行点餐。', 设置折扣: '当前桌台待清理，暂无法设置折扣。', 换台: '当前桌台待清理，暂无法进行换台操作。' },
     }
-    const applyDiscount = () => { const value = Number(discountValue); if (!value || value <= 0 || (discountType === 'percentage' && value >= 100)) { notify(discountType === 'percentage' ? '请输入大于 0 且小于 100 的折扣比例' : '请输入有效的减免金额'); return }; setTableDiscount({ type: discountType, value }); setDiscountOpen(false); notify('整单折扣已应用') }
-    return <><Header title={`${t.name} 桌`} back={close} /><section className={`detail-hero table-detail-hero ${t.status}`}><div className="status-line"><Status>{t.status}</Status>{t.status === '已预订' && <span className="reservation-bell" title="存在有效预订">🛎️</span>}</div><h2>{t.seats} 人桌 · {t.area}</h2><p>{description}</p></section><section className="detail-section"><h3>快捷操作</h3><div className="action-grid table-actions">{actions.map(action => <button key={action} onClick={() => actionClick(action)}>{action}</button>)}</div></section>{t.status === '就餐中' && <TableOrderCore orders={tableOrders} discount={tableDiscount} onCheckout={() => updateTable(t.id, '待清理')} notify={notify} />}{discountOpen && <div className="modal-backdrop"><section className="modal discount-modal"><header><h2>整单折扣设置</h2><button className="modal-close" aria-label="关闭折扣设置" onClick={() => setDiscountOpen(false)}>×</button></header><div className="discount-type"><button className={discountType === 'percentage' ? 'selected' : ''} onClick={() => setDiscountType('percentage')}>百分比折扣</button><button className={discountType === 'fixed' ? 'selected' : ''} onClick={() => setDiscountType('fixed')}>固定金额减免</button></div><label>{discountType === 'percentage' ? '折扣比例（输入 10 表示减免 10%）' : '减免金额'}<input type="number" min="0" step="0.01" value={discountValue} onChange={event => setDiscountValue(event.target.value)} placeholder="请输入折扣数值" /></label><p className="discount-help">{discountType === 'percentage' ? '请输入大于 0 且小于 100 的数值' : '最多支持输入两位小数的正数'}</p><div><button onClick={() => { setTableDiscount(null); setDiscountValue(''); setDiscountOpen(false); notify('已清除整单折扣') }}>清除折扣</button><button className="primary" onClick={applyDiscount}>应用折扣</button></div></section></div>}</>
+    const actionClick = (action: string) => {
+      const message = unavailableActionMessages[t.status][action]
+      if (message) { notify(message, 1000); return }
+      if (action === '开台') openTablePage(t)
+      else if (action === '设置折扣') setDiscountOpen(true)
+      else if (action === '换台') setTransferOpen(true)
+      else if (action === '编辑桌台') openEditTable(t)
+      else openTableModule(t, action)
+    }
+    const applyDiscount = () => { const value = Number(discountValue); if (!value || value <= 0 || (discountType === 'percentage' && value > 100)) { notify(discountType === 'percentage' ? '请输入大于 0 且不超过 100 的数值，最多保留两位小数' : '请输入大于 0 的金额，最多保留两位小数'); return }; setTableDiscount({ type: discountType, value }); setDiscountOpen(false); notify('整单折扣已应用') }
+    const availableTables = tables.filter(table => table.status === '空闲' && table.id !== t.id)
+    const confirmTransfer = () => {
+      if (!transferTarget) return
+      if (!transferTable(t, transferTarget)) { notify('目标桌台容纳人数不足', 1000); setTransferTarget(null); return }
+      setTransferTarget(null)
+      setTransferOpen(false)
+    }
+    return <><Header title={`${t.name} 桌`} back={close} /><section className={`detail-hero table-detail-hero ${t.status}`}><div className="status-line"><Status>{t.status}</Status>{t.reserved && <span className="reservation-bell" title="存在有效预订">🛎️</span>}</div><h2>{t.seats} 人桌 · {t.area}</h2><p>{description}</p></section><section className="detail-section"><h3>快捷操作</h3><div className="action-grid table-actions">{actions.map(action => <button key={action} disabled={action === '换台' && t.status !== '就餐中'} title={action === '换台' && t.status !== '就餐中' ? '仅就餐中桌台可换台' : undefined} onClick={() => actionClick(action)}>{action}</button>)}</div></section>{transferOpen && <div className="modal-backdrop transfer-backdrop"><section className="modal transfer-modal"><header><h2>选择目标桌台 <small>（当前就餐人数：{t.diners ?? 0}人）</small></h2><button className="modal-close" aria-label="关闭选择目标桌台" onClick={() => { setTransferTarget(null); setTransferOpen(false) }}>×</button></header>{availableTables.length ? <div className="transfer-table-grid">{availableTables.map(table => <button className={transferTarget?.id === table.id ? 'selected' : ''} key={table.id} onClick={() => setTransferTarget(table)}><b>{table.name}号桌</b><span>{table.seats}人</span></button>)}</div> : <p className="transfer-empty">暂无可用桌台</p>}<footer className="transfer-actions"><button onClick={() => { setTransferTarget(null); setTransferOpen(false) }}>取消</button><button className="primary" disabled={!transferTarget} onClick={confirmTransfer}>确认换台</button></footer></section></div>}{t.status === '就餐中' && <TableOrderCore orders={tableOrders} discount={tableDiscount} onCheckout={() => updateTable(t.id, '待清理')} notify={notify} />}{discountOpen && <div className="modal-backdrop"><section className="modal discount-modal"><header><h2>{t.name}·设置折扣</h2><button className="modal-close" aria-label="关闭折扣设置" onClick={() => setDiscountOpen(false)}>×</button></header><div className="discount-type"><button className={discountType === 'percentage' ? 'selected' : ''} onClick={() => setDiscountType('percentage')}>百分比折扣</button><button className={discountType === 'fixed' ? 'selected' : ''} onClick={() => setDiscountType('fixed')}>固定金额减免</button></div><label>{discountType === 'percentage' ? '折扣比例（输入 10 表示减免 10%）' : '减免金额'}<input type="number" min="0" step="0.01" value={discountValue} onChange={event => setDiscountValue(event.target.value)} placeholder="请输入折扣数值" /></label><p className="discount-help">{discountType === 'percentage' ? '请输入大于 0 且不超过 100 的数值，最多保留两位小数' : '请输入大于 0 的金额，最多保留两位小数'}</p><div><button onClick={() => { setTableDiscount(null); setDiscountValue(''); setDiscountOpen(false); notify('已清除整单折扣') }}>清除折扣</button><button className="primary" onClick={applyDiscount}>应用折扣</button></div></section></div>}</>
   }
   if (detail.type === 'order') {
     const o = detail.value
@@ -428,6 +547,7 @@ export default function App() {
   const [resettingPassword, setResettingPassword] = useState(false)
   const [tab, setTab] = useState<Tab>('tables'); const [detail, setDetail] = useState<Detail>(null); const [toast, setToast] = useState<string | null>(null)
   const [tables, setTables] = useState(seedTables); const [orders, setOrders] = useState(seedOrders); const [reservations, setReservations] = useState(seedReservations); const [dishes, setDishes] = useState(seedDishes)
+  const [categories, setCategories] = useState<DishCategory[]>([{ id: 'cat-signature', name: '招牌菜', englishName: 'Signature', priority: 1 }, { id: 'cat-hot', name: '热菜', englishName: 'Hot dishes', priority: 2 }, { id: 'cat-dessert', name: '甜品', englishName: 'Desserts', priority: 3 }])
   const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>([
     { id: 's1', table: 'A02', source: '用户', time: '08-16 12:26', category: '添水', content: '麻烦帮忙加两杯温水，谢谢。', status: '待处理' },
     { id: 's2', table: 'B01', source: 'AI', time: '08-16 12:18', category: '人工帮助', content: '识别到 B01 桌顾客在过去五分钟内多次查看服务铃并频繁向出餐口张望，建议服务员尽快前往桌台确认是否需要催菜、补充餐具或提供其他协助。', status: '待处理' },
@@ -439,9 +559,12 @@ export default function App() {
     { id: 'f2', table: 'B01', source: '用户', time: '08-16 12:20', content: '希望可以适当加快出餐速度，等候主菜的时间稍长。', status: '待处理' },
     { id: 'f3', table: 'C01', source: '用户', time: '08-16 11:56', content: '环境舒适，餐具干净。', status: '已处理', note: '已记录并同步门店服务群。' },
   ])
-  const notify = (message: string) => { setToast(message); window.setTimeout(() => setToast(null), 1800) }
+  const notify = (message: string, duration = 1800) => { setToast(message); window.setTimeout(() => setToast(null), duration) }
+  const openTable = (table: Table, diners: number, startedAt: string) => { const openedTable = { ...table, status: '就餐中' as TableStatus, diners, startedAt }; setTables(current => current.map(item => item.id === table.id ? openedTable : item)); setDetail({ type: 'table', value: openedTable }); notify('开台成功') }
+  const transferTable = (source: Table, target: Table) => { if ((source.diners ?? 0) > target.seats) return false; const transferredAt = source.startedAt; const transferredDiners = source.diners; setTables(current => current.map(table => table.id === source.id ? { ...table, status: '空闲', startedAt: undefined, diners: undefined } : table.id === target.id ? { ...table, status: '就餐中', startedAt: transferredAt, diners: transferredDiners } : table)); setDetail(null); notify('已将' + source.name + '号桌换至' + target.name + '号桌'); return true }
   const updateTable = (id: string, status: TableStatus) => { setTables(current => current.map(t => t.id === id ? { ...t, status, startedAt: status === '就餐中' ? '现在' : undefined, diners: status === '就餐中' ? 2 : undefined } : t)); setDetail(null); notify(status === '空闲' ? '已完成清台' : '已成功开台') }
   const addTable = (table: Table) => { setTables(current => [...current, table]); setDetail(null); notify('桌台添加成功') }
+  const updateTableDetails = (table: Table) => { setTables(current => current.map(item => item.id === table.id ? table : item)); setDetail({ type: 'table', value: table }); notify('桌台信息已保存') }
   const confirmOrder = (id: string) => { setOrders(current => current.map(o => o.id === id ? { ...o, status: '制作中' } : o)); setDetail(null); notify('订单已确认，已通知后厨') }
   const updateReservation = (id: string, status: Reservation['status']) => { setReservations(current => current.map(r => r.id === id ? { ...r, status } : r)); setDetail(null); notify('预订状态已更新') }
   const updateServiceRequest = (id: string, note: string) => setServiceRequests(current => current.map(item => item.id === id ? { ...item, note } : item))
@@ -450,5 +573,5 @@ export default function App() {
   const page = useMemo(() => ({ tables: <TablesPage tables={tables} setDetail={setDetail} updateTable={updateTable} />, orders: <OrdersPage orders={orders} setDetail={setDetail} confirmOrder={confirmOrder} />, reservations: <ReservationsPage reservations={reservations} setDetail={setDetail} updateReservation={updateReservation} onBack={() => setTab('more')} />, more: <MorePage setDetail={setDetail} onOpenReservations={() => setTab('reservations')} onOpenFeedback={() => setTab('feedback')} pendingFeedbackCount={feedbackPendingCount} />, service: <ServiceRequestsPage items={serviceRequests} setItems={setServiceRequests} setDetail={setDetail} notify={notify} />, feedback: <CustomerFeedbackPage items={feedbacks} setItems={setFeedbacks} setDetail={setDetail} notify={notify} onBack={() => setTab('more')} />, me: <MePage onLogout={() => { sessionStorage.removeItem('fkm-session'); setLoggedIn(false) }} notify={notify} /> })[tab], [tab, tables, orders, reservations, serviceRequests, feedbacks, feedbackPendingCount])
   const servicePendingCount = serviceRequests.filter(item => item.status === '待处理').length
   if (!loggedIn) return resettingPassword ? <ForgotPassword onBack={() => setResettingPassword(false)} /> : <Login onLogin={() => { sessionStorage.setItem('fkm-session', 'active'); setLoggedIn(true) }} onForgot={() => setResettingPassword(true)} />
-  return <main className="app-shell"><div className="app-content">{detail ? <DetailPage detail={detail} close={() => setDetail(null)} updateTable={updateTable} confirmOrder={confirmOrder} updateReservation={updateReservation} updateServiceRequest={updateServiceRequest} updateFeedback={updateFeedback} tables={tables} orders={orders} dishes={dishes} onDishesChange={setDishes} addTable={addTable} notify={notify} /> : page}</div>{!detail && <nav className="tabbar">{tabItems.map(item => <button key={item.key} className={tab === item.key ? 'selected' : ''} onClick={() => setTab(item.key)}><i>{item.icon}</i>{item.label}{item.key === 'service' && servicePendingCount > 0 && <b>{servicePendingCount}</b>}{item.key === 'more' && feedbackPendingCount > 0 && <b>{feedbackPendingCount}</b>}</button>)}</nav>}<Toast message={toast} /></main>
+  return <main className="app-shell"><div className="app-content">{detail ? <DetailPage detail={detail} close={() => setDetail(null)} openModule={name => setDetail({ type: 'module', value: name })} openTablePage={table => setDetail({ type: 'openTable', value: table })} openEditTable={table => setDetail({ type: 'editTable', value: table })} openTableModule={(table, name) => setDetail({ type: 'module', value: `${table.name}·${name}`, table })} returnToTable={table => setDetail({ type: 'table', value: tables.find(item => item.id === table.id) ?? table })} openTable={openTable} transferTable={transferTable} updateTable={updateTable} confirmOrder={confirmOrder} updateReservation={updateReservation} updateServiceRequest={updateServiceRequest} updateFeedback={updateFeedback} tables={tables} orders={orders} dishes={dishes} categories={categories} onDishesChange={setDishes} onCategoriesChange={setCategories} addTable={addTable} updateTableDetails={updateTableDetails} notify={notify} /> : page}</div>{!detail && <nav className="tabbar">{tabItems.map(item => <button key={item.key} className={tab === item.key ? 'selected' : ''} onClick={() => setTab(item.key)}><i>{item.icon}</i>{item.label}{item.key === 'service' && servicePendingCount > 0 && <b>{servicePendingCount}</b>}{item.key === 'more' && feedbackPendingCount > 0 && <b>{feedbackPendingCount}</b>}</button>)}</nav>}<Toast message={toast} /></main>
 }

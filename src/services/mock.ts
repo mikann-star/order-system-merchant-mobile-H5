@@ -7,7 +7,7 @@ export const tables: Table[] = [
   { id: 't1', name: 'A01', seats: 2, area: '大厅', status: '空闲' },
   { id: 't2', name: 'A02', seats: 4, area: '大厅', status: '就餐中', startedAt: '11:32', diners: 3 },
   { id: 't3', name: 'A03', seats: 4, area: '大厅', status: '待清理' },
-  { id: 't4', name: 'B01', seats: 6, area: '包间', status: '已预订' },
+  { id: 't4', name: 'B01', seats: 6, area: '包间', status: '空闲', reserved: true },
   { id: 't5', name: 'B02', seats: 8, area: '包间', status: '空闲' },
   { id: 't6', name: 'C01', seats: 4, area: '露台', status: '就餐中', startedAt: '12:05', diners: 4 },
 ]
