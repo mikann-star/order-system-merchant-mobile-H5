@@ -20,14 +20,26 @@ export const orders: Order[] = [
   { id: 'FKM20260815003', table: '外卖', time: '08-16 11:48', status: '已完成', source: '用户自点', items: [{ id: 'oi-9', name: '牛肉粉', quantity: 2, originalUnitPrice: 38, discountedUnitPrice: 38 }, { id: 'oi-10', name: '冰豆花', quantity: 1, originalUnitPrice: 13, discountedUnitPrice: 13 }] },
 ]
 
+const reservationTime = (daysFromToday: number, hour: number, minute: number) => { const date = new Date(); date.setSeconds(0, 0); date.setDate(date.getDate() + daysFromToday); date.setHours(hour, minute, 0, 0); return date.toISOString() }
+const reservationDisplay = (iso: string) => { const date = new Date(iso); return `${String(date.getFullYear()).slice(2)}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}` }
 export const reservations: Reservation[] = [
-  { id: 'r1', guest: '王女士', phone: '138****2310', time: '今天 18:30', people: 4, table: 'B01', status: '待就餐' },
-  { id: 'r2', guest: '赵先生', phone: '186****9951', time: '今天 12:00', people: 2, table: 'A06', status: '已到店' },
-  { id: 'r3', guest: '林女士', phone: '139****6218', time: '明天 19:00', people: 6, table: 'B03', status: '待就餐' },
+  (() => { const scheduledAt = reservationTime(0, Math.max(new Date().getHours() + 2, 18), 30); return { id: 'r1', guest: '王女士', phone: '138****2310', scheduledAt, time: reservationDisplay(scheduledAt), people: 4, table: 'B01', status: '待就餐' as const, note: '靠窗优先' } })(),
+  (() => { const scheduledAt = reservationTime(1, 12, 0); return { id: 'r2', guest: '赵先生', phone: '186****9951', scheduledAt, time: reservationDisplay(scheduledAt), people: 2, table: 'A06', status: '已就餐' as const } })(),
+  (() => { const scheduledAt = reservationTime(1, 19, 0); return { id: 'r3', guest: '林女士', phone: '139****6218', scheduledAt, time: reservationDisplay(scheduledAt), people: 6, table: 'B03', status: '待就餐' as const } })(),
 ]
-
 export const dishes: Dish[] = [
-  { id: 'd1', name: '招牌酸菜鱼', englishName: 'Pickled Fish', category: '招牌菜', price: 98, stock: 18, recommended: true, discount: 10, status: '已上架' },
+  { id: 'd1', name: '招牌酸菜鱼', englishName: 'Pickled Fish', category: '招牌菜', price: 98, stock: 18, recommended: true, discount: 10, status: '已上架', description: '鲜香酸爽，可按口味选择辣度和加料', specs: [
+    { id: 'spice', name: '辣度', englishName: 'Spice', selection: '单选', defaultOptionId: 'spice-mild', options: [
+      { id: 'spice-none', name: '不辣', englishName: 'No spice', priceDelta: 0 },
+      { id: 'spice-mild', name: '微辣', englishName: 'Mild', priceDelta: 0 },
+      { id: 'spice-hot', name: '中辣', englishName: 'Medium', priceDelta: 0 },
+    ] },
+    { id: 'extras', name: '加料', englishName: 'Extras', selection: '多选', defaultOptionId: 'extra-tofu', options: [
+      { id: 'extra-tofu', name: '豆腐', englishName: 'Tofu', priceDelta: 6 },
+      { id: 'extra-noodle', name: '宽粉', englishName: 'Noodles', priceDelta: 8 },
+      { id: 'extra-fish', name: '加鱼片', englishName: 'Extra fish', priceDelta: 18 },
+    ] },
+  ] },
   { id: 'd2', name: '椒盐排骨', englishName: 'Salt & Pepper Ribs', category: '热菜', price: 58, stock: 12, status: '已上架' },
   { id: 'd3', name: '冰豆花', englishName: 'Iced Tofu Pudding', category: '甜品', price: 12, stock: 0, status: '售罄' },
 ]

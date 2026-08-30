@@ -23,8 +23,12 @@ import './service-category-inline.css'
 import './account-settings.css'
 import './preference-settings.css'
 import './language-select.css'
+import './item-actions.css'
 import './account-row-layout.css'
 import './store-settings.css'
+import './ai-settings.css'
+import './password-modal.css'
+import './merchant-ordering.css'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode><App /></StrictMode>,
