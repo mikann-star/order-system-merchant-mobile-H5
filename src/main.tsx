@@ -29,6 +29,7 @@ import './store-settings.css'
 import './ai-settings.css'
 import './password-modal.css'
 import './merchant-ordering.css'
+import './finance-stats.css'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode><App /></StrictMode>,

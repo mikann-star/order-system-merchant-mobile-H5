@@ -12,7 +12,16 @@ export const tables: Table[] = [
   { id: 't6', name: 'C01', seats: 4, area: '露台', status: '就餐中', startedAt: '12:05', diners: 4 },
 ]
 
+const orderNow = new Date()
+const orderPad = (value: number) => String(value).padStart(2, '0')
+const todayOrderDate = `${orderPad(orderNow.getMonth() + 1)}-${orderPad(orderNow.getDate())}`
+const todayOrderIdPrefix = `FKM${orderNow.getFullYear()}${orderPad(orderNow.getMonth() + 1)}${orderPad(orderNow.getDate())}`
+
 export const orders: Order[] = [
+  { id: `${todayOrderIdPrefix}001`, table: 'A02', time: `${todayOrderDate} 09:18`, status: '待确认', source: '用户自点', items: [{ id: 'today-oi-1', name: '招牌酸菜鱼', quantity: 1, originalUnitPrice: 108, discountedUnitPrice: 98, specs: '微辣 | 中份' }, { id: 'today-oi-2', name: '米饭', quantity: 2, originalUnitPrice: 3, discountedUnitPrice: 3, specs: '普通米饭' }] },
+  { id: `${todayOrderIdPrefix}002`, table: 'C01', time: `${todayOrderDate} 11:36`, status: '制作中', source: '商家代点', items: [{ id: 'today-oi-3', name: '椒盐排骨', quantity: 1, originalUnitPrice: 58, discountedUnitPrice: 58, specs: '微辣' }, { id: 'today-oi-4', name: '清炒时蔬', quantity: 1, originalUnitPrice: 28, discountedUnitPrice: 25, specs: '少油' }] },
+  { id: `${todayOrderIdPrefix}003`, table: '外卖', time: `${todayOrderDate} 12:05`, status: '已完成', source: '用户自点', items: [{ id: 'today-oi-5', name: '牛肉粉', quantity: 2, originalUnitPrice: 38, discountedUnitPrice: 38 }, { id: 'today-oi-6', name: '冰豆花', quantity: 1, originalUnitPrice: 12, discountedUnitPrice: 12 }] },
+  { id: `${todayOrderIdPrefix}004`, table: 'B01', time: `${todayOrderDate} 13:12`, status: '待确认', source: '商家代点', wholeDiscount: { type: 'fixed', value: 8 }, items: [{ id: 'today-oi-7', name: '招牌酸菜鱼', quantity: 1, originalUnitPrice: 108, discountedUnitPrice: 98, specs: '不辣 | 中份' }, { id: 'today-oi-8', name: '米饭', quantity: 4, originalUnitPrice: 3, discountedUnitPrice: 3, specs: '普通米饭' }] },
   { id: 'FKM20260815001', table: 'A02', time: '08-16 11:42', status: '制作中', source: '商家代点', items: [{ id: 'oi-1', name: '招牌酸菜鱼', quantity: 1, originalUnitPrice: 108, discountedUnitPrice: 98, specs: '微辣 | 中份' }, { id: 'oi-2', name: '米饭', quantity: 3, originalUnitPrice: 3, discountedUnitPrice: 3, specs: '普通米饭' }] },
   { id: 'FKM20260815004', table: 'A02', time: '08-16 12:06', status: '待确认', source: '用户自点', wholeDiscount: { type: 'percentage', value: 0.1 }, items: [{ id: 'oi-3', name: '椒盐排骨', quantity: 1, originalUnitPrice: 58, discountedUnitPrice: 58, specs: '微辣' }, { id: 'oi-4', name: '清炒时蔬', quantity: 1, originalUnitPrice: 28, discountedUnitPrice: 25, specs: '少油' }] },
   { id: 'FKM20260815005', table: 'A02', time: '08-16 12:18', status: '制作中', source: '用户自点', items: [{ id: 'oi-5', name: '冰豆花', quantity: 2, originalUnitPrice: 12, discountedUnitPrice: 12 }] },
