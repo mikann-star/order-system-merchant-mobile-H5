@@ -148,7 +148,7 @@ function openTable(id){
  $('diningTableInfo').innerHTML=rows([['用餐人数','1 人'],['开台时间','2026-09-23 12:00'],['用餐时长','48 分钟']]);
  const orders='<table class="orders-table"><thead><tr><th>订单编号</th><th>下单时间</th><th>订单发起人</th></tr></thead><tbody>'+['12:05','12:16','12:20','12:32','12:40'].map((time,i)=>'<tr><td>#20260923'+t.id+'-00'+(i+1)+'</td><td>'+time+'</td><td><span class="order-badge">商家代点</span></td></tr>').join('')+'</tbody></table>';
  $('detailOrders').innerHTML=orders;$('panel-orders').innerHTML='<h3>当前桌台订单</h3><div class="orders-wrap">'+orders+'</div>';
- $('reprintQr').hidden=currentQrType()!=='once';
+ $('reprintQr').hidden=false;
  selectDetailTab('info');detailDialog.showModal();syncScroll();
 }
 $('managementGrid').addEventListener('click',event=>{const button=event.target.closest('[data-table]');if(button)openTable(button.dataset.table)});
@@ -163,7 +163,7 @@ function showDetailToast(message,duration=1000){
 }
 $('changeTable').addEventListener('click',()=>showDetailToast('请选择目标桌台',1000));
 $('reprintQr').addEventListener('click',()=>{
- if(!activeTable||reprinting||currentQrType()!=='once')return;
+ if(!activeTable||reprinting)return;
  reprinting=true;$('reprintQr').disabled=true;showDetailToast('正在补打桌台点餐二维码',1000);
  // Production integration point: send activeTable.sessionQrImageUrl to the connected printer service here.
  setTimeout(()=>{reprinting=false;$('reprintQr').disabled=false},1000);
@@ -173,3 +173,4 @@ showPage(location.hash==='#tables'?'tables':'settings');
 </script>
 </body>
 </html>
+
